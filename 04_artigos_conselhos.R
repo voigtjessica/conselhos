@@ -177,14 +177,26 @@ length(termos_falsos) #
 
 df_termos_unicos <- df %>%
   group_by(termos, nome_artigo, url_artigo) %>%
-  summarise(total_repeticoes = n(), .groups = "keep") %>%    #7647 termos unicos por artigo, mas eles estão sujos
+  summarise(total_repeticoes = n(), .groups = "keep") %>%    #7647 termos unicos por artigo, mas eles estão sujos e nao se repetem muito
   ungroup() %>%
-  mutate(artigo_tem_conselho = ifelse(url_artigo %in% artigos_sobre_conselhos, 1, 0)) %>%
-  filter(artigo_tem_conselho == 0) %>%
-  mutate(termo_verdadeiro = ifelse(termos %in% termos_verdadeiros, 1, 0),
-         termos_falsos = ifelse(termos %in% termos_falsos, 1, 0)) # não achou nada.
+  mutate_at(vars(termos, nome_artigo), ~ str_replace_all(., c('"' = '',
+                                                              ';' = ',',
+                                                              '\\s+' = ' '))) %>%
+  mutate(artigo_tem_conselho = ifelse(url_artigo %in% artigos_sobre_conselhos, 1, 0),
+         termo_verdadeiro = ifelse(termos %in% termos_verdadeiros, 1, 0),
+         termos_falsos = ifelse(termos %in% termos_falsos, 1, 0))  %>%    # não achou nada.
+  filter(artigo_tem_conselho == 0, # sobraram 3141
+         termo_verdadeiro == 0,    # não achou nada
+         termos_falsos == 0)  %>%     # não achou nada
+  distinct() %>%
+  group_by(nome_artigo, url_artigo) %>%
+  summarize(termos_concatenados = str_c(termos, collapse = " | "), .groups = "keep")
 
 # Bom, agora eu tenho uma lista de termos que eu tenho que verificar na mão se
 # se tratam de conselhos ou não. Vou salvar:
 
-fwrite(df_termos_unicos, file="revisao_termos_2.csv")
+write.csv2(df_termos_unicos,
+           file="revisao_termos_2.csv",
+           fileEncoding = "UTF-8",
+           row.names = FALSE)
+
