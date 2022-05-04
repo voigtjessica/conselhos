@@ -1,44 +1,14 @@
 #04_artigos_conselhos
 
 library(dplyr)
+library(data.table)
+library(stringr)
 
 #Agora queremos colher todos os artigos que têm a ver com participacao.
 
-setwd("C:\\Users\\yvfg3118\\Documents\\R Scripts\\conselhos")
+setwd("/Volumes/KINGSTON/Adrian/scielo_conselhos")
+#setwd("C:\\Users\\yvfg3118\\Documents\\R Scripts\\conselhos")
 load(file="03_lista_artigos_pt_verificados.Rdata")
-
-
-#primeiro vou pegar os termos que entram, depois eu vou fazer desambiguacao:
-
-termos_participacao <- c("Participação democrática",
-                         "Participação popular",
-                         "Participação extraparlamentar",
-                         "Participação social",
-                         "Participação da sociedade civil",
-                         "participação cidadã",
-                         "Participação de cidadãos",
-                         "Participação dos cidadãos",
-                         "Participação de movimentos sociais",
-                         "Participação dos movimentos sociais",
-                         "Participação de movimento social",
-                         "Participação do movimentos sociais",
-                         "Participação de organizações",
-                         "Participação das organizações",
-                         "Participação de organização",
-                         "Participação da organização",
-                         "Participação coletiva",
-                         "Participação deliberativa",
-                         "Participação na política pública" ,
-                         "Participação em política pública",
-                         "Participação em políticas públicas",
-                         "Participação nas políticas públicas",
-                         "Arquitetura da participação",
-                         "Governança participativa")
-
-
-termos_participacao <- paste(tolower(termos_participacao), collapse = "|")
-
-busca <- paste0(".*(conselh.*", termos_participacao, "|",termos_participacao, ".*conselh).*")
 
 #criando lista de artigos com o termo conselho e participacao:
 
@@ -51,11 +21,18 @@ pb = txtProgressBar(min = 0, max = length(lista_artigos_pt_verificados), initial
 
 for(i in 1:length(lista_artigos_pt_verificados)){
   
-  t <- grepl(busca, lista_artigos_pt_verificados[[i]][5], ignore.case=TRUE)
+  #selecionar o texto
+  texto <- lista_artigos_pt_verificados[[i]][5]
+  
+  #buscar conselh$ e termos da participacao, independente da ordem:
+  t <- grepl("\\bconselh.*", texto, ignore.case=TRUE) & grepl(termos_participacao, texto, ignore.case=TRUE)
+  
+  #quando achar:
   if(t == TRUE){
     
     n <- length(artigos_conselhos)
     n <- n + 1
+    #adicionar na lista
     artigos_conselhos[[n]] <- lista_artigos_pt_verificados[[i]]
     
   }
@@ -68,10 +45,52 @@ for(i in 1:length(lista_artigos_pt_verificados)){
 # Salvar script
 
 save(artigos_conselhos, file="04_artigos_conselhos.Rdata")
+#load("/Volumes/KINGSTON/Adrian/scielo_conselhos/04_artigos_conselhos.Rdata")
 
-#################### DESAMBIGUIACAO:
 
-#passo 1: criar uma lista apenas com os textos:
+######## AGORA É A PARTE QUE EU VOU CORRIGIR:
+# Eu preciso criar um data_frame contendo todos os artigos com pelo menos uma menção ao nome conselho
+# e o nome do artigo:
+
+df <- data.frame(termo = character(), 
+                 nome_artigo = character(), 
+                 url_artigo = character())
+
+
+for(i in 1:length(artigos_conselhos)){
+  
+  if(grepl("conselhos?(?:\\s+\\w+){1,2}", artigos_conselhos[[i]][[5]])){
+    
+    print(paste0(i, " TRUE"))
+    
+    termos <- artigos_conselhos[[i]][[5]] %>%
+      str_extract_all("conselhos?(?:\\s+\\w+){1,3}") %>%
+      unlist()
+    
+    a <- length(termos)
+    nome_artigo <- rep(artigos_conselhos[[i]][[6]][[2]], a)
+    url_artigo <- rep(artigos_conselhos[[i]][[4]], a)
+    
+    df1 <- data.frame(termos, nome_artigo, url_artigo)
+    df <- rbind(df, df1)
+    
+  } else
+    {
+    print(paste0(i, " FALSE"))
+  }
+}
+
+rm(termos)
+rm(df1)
+rm(a)
+rm(nome_artigo)
+rm(url_artigo)
+rm(i)
+
+
+### parte 2
+# Tenho que descobrir os textos do que eu já categorizei:
+# criar uma lista apenas com os textos:
 
 pb = txtProgressBar(min = 0, max = length(artigos_conselhos), initial = 0) 
 
@@ -80,22 +99,42 @@ objeto_artigos_conselhos <- c()
 for(i in 1:length(artigos_conselhos)){
   
   a <- tolower(artigos_conselhos[[i]][5])
-  objeto_artigos_conselhos[i] <- a
+  b <- artigos_conselhos[[i]][[4]]
+  objeto_artigos_conselhos[[i]] <- list(a, b)
   
   #barra de progresso:
   setTxtProgressBar(pb,i)
 }
 
-### PASSO 2, verificar as ocorrencias para conselho que existem:
+rm(a)
+rm(b)
+rm(pb)
+rm(i)
+### Verificar as ocorrencias para conselho que existem:
 # estou criando um objeto de strings termos_conselho, que tem todas as ocorrencias de conselho
 # dentro dos 4 mil textos:
 
-termos_conselho <- objeto_artigos_conselhos %>% 
-  str_extract_all("conselho.+") %>% 
-  word(1,6)
+dftermos_conselho <- data.frame()
+
+for(i in 1:length(objeto_artigos_conselhos)){
+  
+  if(grepl("conselho.+", objeto_artigos_conselhos[[i]][[1]])){
+   
+     termos_conselho <- objeto_artigos_conselhos[[i]][[1]] %>% 
+      str_extract_all("conselho.+") %>% 
+      word(1,6)
+    
+    url_artigo <- objeto_artigos_conselhos[[i]][[2]]
+    df1 <- data.frame(termos_conselho, url_artigo)
+    dftermos_conselho <-rbind(dftermos_conselho, df1)
+  }
+}
+
+
+dftermos_conselho <- dftermos_conselho %>%
+  distinct()
 
 termos_conselho <- unique(termos_conselho) # 2310 ocorrencias ainda sujas.
-dftermos_conselho <- data.frame(termos_conselho)
 
 
 dftermos_conselho <- dftermos_conselho %>%
@@ -103,24 +142,49 @@ dftermos_conselho <- dftermos_conselho %>%
          termos_conselho = gsub('\\"', '', termos_conselho))
          
 
-# Agora eu vou ver na mao o que que eu quero:
+# Agora eu vou importar o arquivo que eu já trabalhei e fazer um left_join para 
+# saber o que é conselho e o que não é.
 
-save(dftermos_conselho, file="dftermos_conselho.Rdata")
-write.csv(dftermos_conselho, file="dftermos_conselho.csv")
+classificados <- fread("/Volumes/KINGSTON/Adrian/scielo_conselhos/dftermos_conselho_verificando - Classificacao_final.csv")
 
-#### Próximos passos:
+cruzamento <- dftermos_conselho %>%
+  left_join(classificados, by = "termos_conselho")
 
-# fazer um novo elemento quando tem uma vírcula dentro do elemento, porque 
-# isso significa que ele achou mais de um conselho
+# Agora vou fazer três objetos: 1 com os artigos que tem conselho 
+# outro com os termos que sabemos ser conselhos e mais um com os termos
+# que sabemos não ser conselhos, pra automatizar.
 
+artigos_sobre_conselhos <- cruzamento %>%
+  filter(incluir_final == 1)
 
+artigos_sobre_conselhos <- unique(artigos_sobre_conselhos$url_artigo)
+length(artigos_sobre_conselhos) #1229
 
+termos_verdadeiros <- cruzamento %>%
+  filter(incluir_final == 1)
 
-# retirar caracteres sujos e coisas que nao sao nome
+termos_verdadeiros <- unique(termos_verdadeiros$termos_conselho)
+length(termos_verdadeiros) #980
 
+termos_falsos <- cruzamento %>%
+  filter(incluir_final == 0) 
 
-# filtrar para MANTER aqueles textos que tem ao menos uma ocorrência dos termos de conselho que 
-# a gente aceita, incluindo conselho sem nada. 
+termos_falsos <- unique(termos_falsos$termos_conselho)
+length(termos_falsos) #
 
+#Finalmente, vou começar a limpar a lista. Vamos verificar o elemento único 
+#encontrado no nosso df geralzão, 
 
+df_termos_unicos <- df %>%
+  group_by(termos, nome_artigo, url_artigo) %>%
+  summarise(total_repeticoes = n(), .groups = "keep") %>%    #7647 termos unicos por artigo, mas eles estão sujos
+  ungroup() %>%
+  mutate(artigo_tem_conselho = ifelse(url_artigo %in% artigos_sobre_conselhos, 1, 0)) %>%
+  filter(artigo_tem_conselho == 0) %>%
+  mutate(termo_verdadeiro = ifelse(termos %in% termos_verdadeiros, 1, 0),
+         termos_falsos = ifelse(termos %in% termos_falsos, 1, 0)) # não achou nada.
 
+# Bom, agora eu tenho uma lista de termos que eu tenho que verificar na mão se
+# se tratam de conselhos ou não. Vou salvar:
+
+fwrite(df_termos_unicos, file="revisao_termos_2.csv")
